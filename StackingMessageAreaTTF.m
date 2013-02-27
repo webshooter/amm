@@ -23,36 +23,53 @@
         offset = ( (self.messagesMoveDown)
                    ? ccp(0, -self.verticalOffset)
                    : ccp(0, self.verticalOffset) );
+        
+        anyMessagesMoving = NO;
     }
     return self;
 }
 
 -(void)showMessages
 {
-    CCLabelTTF* msg = (CCLabelTTF*)[self getNextMessage];
-    if (msg != nil)
+    
+    // Don't add a new message while a previous message is moving
+    if (!anyMessagesMoving)
     {
-        if ([self anyAnimating])
+        CCLabelTTF* msg = (CCLabelTTF*)[self getNextMessage];
+        if (msg != nil)
         {
-            for (CCNode* child in msgArea.children)
+            if ([self anyAnimating])  // are any messages still in the fade out animation?
             {
-                [child runAction:[CCMoveBy actionWithDuration:self.moveDuration position:offset]];
+                for (CCNode* child in msgArea.children)
+                {
+                    id startmoving = [CCCallFuncND actionWithTarget:self selector:@selector(markMoving:data:) data:YES];
+                    id move        = [CCMoveBy actionWithDuration:self.moveDuration position:offset];
+                    id stopmoving  = [CCCallFuncND actionWithTarget:self selector:@selector(markMoving:data:) data:NO];
+                    [child runAction:[CCSequence actions:startmoving, move, stopmoving, nil]];
+                }
             }
-        }
-        else
-        {
-            if (msgArea.children.count > 0)
+            else  // any messages have faded, remove them
             {
-                [self removeMessageAreaChildren];
+                if (msgArea.children.count > 0)
+                {
+                    [self removeMessageAreaChildren];
+                }
             }
+            
+            [msg setOpacity:0];
+            [msgArea addChild:msg];
+            id wait  = [CCDelayTime actionWithDuration:2];
+            id start = [CCCallFuncND actionWithTarget:self selector:@selector(startAnimation:data:) data:msg];
+            id stop  = [CCCallFuncND actionWithTarget:self selector:@selector(stopAnimation:data:)  data:msg];
+            id seq   = start;
+            if (anyMessagesMoving)
+            {
+                seq = [CCSequence actionOne:wait two:seq];
+            }
+            seq = [CCSequence actionOne:seq two:[self animationSequence]];
+            seq = [CCSequence actionOne:seq two:stop];
+            [msg runAction:seq];
         }
-        
-        [msgArea addChild:msg];
-        id start = [CCCallFuncND actionWithTarget:self selector:@selector(startAnimation:data:) data:msg];
-        id stop  = [CCCallFuncND actionWithTarget:self selector:@selector(stopAnimation:data:)  data:msg];
-        id seq   = [CCSequence actionOne:start two:[self animationSequence]];
-        seq      = [CCSequence actionOne:seq two:stop];
-        [msg runAction:seq];
     }
 }
 
@@ -60,11 +77,12 @@
 {
     
     // animation sequence
-    id show = [CCDelayTime actionWithDuration:self.visibleDuration];
-    id fade = [CCFadeOut actionWithDuration:self.fadeDuration];
-    id move = [CCMoveTo actionWithDuration:0 position:self.offScreenLocation];
+    id fadein  = [CCFadeIn actionWithDuration:0.25];
+    id show    = [CCDelayTime actionWithDuration:self.visibleDuration];
+    id fadeout = [CCFadeOut actionWithDuration:self.fadeDuration];
+    id move    = [CCMoveTo actionWithDuration:0 position:self.offScreenLocation];
 
-    return [CCSequence actions:show, fade, move, nil];
+    return [CCSequence actions:fadein, show, fadeout, move, nil];
 }
 
 -(void)startAnimation:(id)source data:(CCLabelTTF*)label
@@ -75,6 +93,11 @@
 -(void)stopAnimation:(id)source data:(CCLabelTTF*)label
 {
     [label setTag:0];
+}
+
+-(void)markMoving:(id)source data:(BOOL)moving
+{
+    anyMessagesMoving = moving;
 }
 
 -(BOOL)anyAnimating

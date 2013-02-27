@@ -11,6 +11,7 @@
 @interface StackingMessageAreaTTF : AppMessageAreaTTF
 {
     CGPoint offset;
+    BOOL anyMessagesMoving;
 }
 
 @property ccTime visibleDuration;
